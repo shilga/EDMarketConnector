@@ -16,6 +16,11 @@ import _strptime	# Workaround for http://bugs.python.org/issue7980
 from calendar import timegm
 import webbrowser
 
+from klein import Klein, route
+webapp = Klein()
+from twisted.internet import endpoints, reactor, tksupport
+from twisted.web.server import Site
+
 from config import appname, applongname, appversion, config
 
 if getattr(sys, 'frozen', False):
@@ -45,6 +50,8 @@ from l10n import Translations
 Translations.install(config.get('language') or None)
 
 import companion
+import companion_oauth2
+from companion_oauth2 import oauth2_webapp
 import commodity
 from commodity import COMMODITY_CSV
 import td
@@ -370,9 +377,9 @@ class AppWindow:
                 raise companion.CredentialsError()
             idx = config.get('cmdrs').index(monitor.cmdr)
             username = config.get('fdev_usernames')[idx]
-            companion.session.login(username, config.get_password(username), monitor.is_beta)
+            companion.session.login(username, config.get_password(username), config.get('token'), monitor.is_beta)
             self.status['text'] = ''
-        except companion.VerificationRequired:
+        except companion_oauth2.VerificationRequired:
             if not self.authdialog:
                 self.authdialog = prefs.AuthenticationDialog(self.w, partial(self.verify, self.login))
         except companion.ServerError as e:
@@ -383,17 +390,10 @@ class AppWindow:
         self.cooldown()
 
     # callback after verification code
-    def verify(self, callback, code):
+    def verify(self):
         self.authdialog = None
-        try:
-            companion.session.verify(code)
-            config.save()	# Save settings now for use by command-line app
-        except Exception as e:
-            if __debug__: print_exc()
-            self.button['state'] = self.theme_button['state'] = tk.NORMAL
-            self.status['text'] = unicode(e)
-        else:
-            return callback()	# try again
+        self.status['text'] = 'Authentication successful'
+
 
     def getandsend(self, event=None, retrying=False):
 
@@ -687,6 +687,7 @@ class AppWindow:
             config.set('geometry', '+{1}+{2}'.format(*self.w.geometry().split('+')))
         self.w.withdraw()	# Following items can take a few seconds, so hide the main window while they happen
         hotkeymgr.unregister()
+        reactor.stop()
         dashboard.close()
         monitor.close()
         plug.notify_stop()
@@ -727,6 +728,7 @@ class AppWindow:
             self.w.attributes("-transparentcolor", 'grey4')
             self.theme_menubar.grid_remove()
             self.blank_menubar.grid(row=0, columnspan=2, sticky=tk.NSEW)
+
 
 # Run the app
 if __name__ == "__main__":
@@ -774,4 +776,27 @@ if __name__ == "__main__":
 
     root = tk.Tk()
     app = AppWindow(root)
-    root.mainloop()
+
+    # Create desired endpoint
+    endpoint_description = "tcp:port=8080:interface=127.0.0.1"
+    endpoint = endpoints.serverFromString(reactor, endpoint_description)
+
+    # add oauth2 subpath to webserver
+    with webapp.subroute("/oauth2"):
+        oauth2_webapp(webapp)
+
+    # This actually starts listening on the endpoint with the Klein app
+    endpoint.listen(Site(webapp.resource()))
+
+    # add gui (tkinter) to twisted reactor
+    tksupport.install(root)
+
+    # After doing other things like setting up logging,
+    # starting other services in the reactor or
+    # listening on other ports or sockets:
+    reactor.run()
+
+    # root.mainloop()
+
+
+

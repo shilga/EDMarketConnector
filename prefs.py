@@ -16,6 +16,7 @@ from hotkey import hotkeymgr
 from l10n import Translations
 from monitor import monitor
 from theme import theme
+from companion_oauth2 import companionoauth2
 
 import plug
 
@@ -112,6 +113,9 @@ class PreferencesDialog(tk.Toplevel):
         self.password_label = nb.Label(credframe, text=_('Password'))		# Use same text as E:D Launcher's login dialog
         self.password_label.grid(row=12, padx=PADX, sticky=tk.W)
 
+        self.token_label = nb.Label(credframe, text=_('Token'))		# Use same text as E:D Launcher's login dialog
+        self.token_label.grid(row=13, padx=PADX, sticky=tk.W)
+
         self.cmdr_text = nb.Label(credframe)
         self.cmdr_text.grid(row=10, column=1, padx=PADX, pady=PADY, sticky=tk.W)
         self.username = nb.Entry(credframe)
@@ -120,6 +124,11 @@ class PreferencesDialog(tk.Toplevel):
             self.username.focus_set()
         self.password = nb.Entry(credframe, show=u'•')
         self.password.grid(row=12, column=1, padx=PADX, pady=PADY, sticky=tk.EW)
+
+        token = config.get('token') or '42'  # default
+        self.token = nb.Entry(credframe)
+        self.token.insert(10, token)
+        self.token.grid(row=13, column=1, padx=PADX, pady=PADY, sticky=tk.EW)
 
         nb.Label(credframe).grid(sticky=tk.W)	# big spacer
         nb.Label(credframe, text=_('Privacy')).grid(padx=PADX, sticky=tk.W)	# Section heading in settings
@@ -535,6 +544,8 @@ class PreferencesDialog(tk.Toplevel):
                 _putfirst('cmdrs', idx, self.cmdr)
                 _putfirst('fdev_usernames', idx, self.username.get().strip())
 
+        config.set('token', self.token.get().strip())
+
         config.set('output',
                    (self.out_td.get()   and config.OUT_MKT_TD) +
                    (self.out_csv.get()  and config.OUT_MKT_CSV) +
@@ -632,16 +643,14 @@ class AuthenticationDialog(tk.Toplevel):
         frame.columnconfigure(0, weight=3)
         frame.columnconfigure(2, weight=1)
 
-        ttk.Label(frame, text=_('A verification code has now been sent to the{CR}email address associated with your Elite account.') +	# Use same text as E:D Launcher's verification dialog
+        ttk.Label(frame, text=_('You have to login on Frontier Authentication server and allow access') +
 
-                  '\n' +
-                  _('Please enter the code into the box below.'), anchor=tk.W, justify=tk.LEFT).grid(columnspan=4, sticky=tk.NSEW)	# Use same text as E:D Launcher's verification dialog
+                  '\n\n' +
+                  _('Click on the button to open the website. This window will stay open until the process is finished'), anchor=tk.W, justify=tk.LEFT).grid(columnspan=4, sticky=tk.NSEW)	# Use same text as E:D Launcher's verification dialog
         ttk.Label(frame).grid(row=1, column=0)	# spacer
-        self.code = ttk.Entry(frame, width=8, validate='key', validatecommand=(self.register(self.validatecode), '%P', '%d', '%i', '%S'))
-        self.code.grid(row=1, column=1)
-        self.code.focus_set()
+
         ttk.Label(frame).grid(row=1, column=2)	# spacer
-        self.button = ttk.Button(frame, text=_('OK'), command=self.apply, state=tk.DISABLED)
+        self.button = ttk.Button(frame, text=_('Open Auth website'), command=self.openWebsite)
         self.button.bind("<Return>", lambda event:self.apply())
         self.button.grid(row=1, column=3, sticky=tk.E)
 
@@ -664,29 +673,17 @@ class AuthenticationDialog(tk.Toplevel):
                                             0x10000, None, position):
                 self.geometry("+%d+%d" % (position.left, position.top))
 
-        self.bind('<Return>', self.apply)
 
+    def openWebsite(self, event=None):
+        webbrowser.open(companionoauth2.start_auth(self.onAuth))
 
-    def validatecode(self, newval, ins, idx, diff):
-        self.code.selection_clear()
-        self.code.delete(0, tk.END)
-        self.code.insert(0, newval.upper())
-        self.code.icursor(int(idx) + (int(ins)>0 and len(diff) or 0))
-        self.after_idle(lambda: self.code.config(validate='key'))	# http://tcl.tk/man/tcl8.5/TkCmd/entry.htm#M21
-        self.button['state'] = len(newval.strip())==5 and tk.NORMAL or tk.DISABLED
-        return True
-
-    def apply(self, event=None):
-        code = self.code.get().strip()
-        if len(code) == 5:
-            self.parent.wm_attributes('-topmost', config.getint('always_ontop') and 1 or 0)
-            self.destroy()
-            if self.callback: self.callback(code)
+    def onAuth(self):
+        self.destroy()
 
     def _destroy(self):
         self.parent.wm_attributes('-topmost', config.getint('always_ontop') and 1 or 0)
         self.destroy()
-        if self.callback: self.callback(None)
+        if self.callback: self.callback()
 
 # migration from <= 2.25. Assumes current Cmdr corresponds to the saved credentials
 def migrate(current_cmdr):

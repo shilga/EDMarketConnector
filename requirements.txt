@@ -5,3 +5,5 @@ PyYAML>=3.12
 requests>=2.11.1
 watchdog>=0.8.3
 wheel>=0.24.0
+klein>=16.12
+pypiwin32

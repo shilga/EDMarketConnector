@@ -12,6 +12,8 @@ from traceback import print_exc
 
 from config import appname, appversion, config
 
+from companion_oauth2 import companionoauth2
+
 holdoff = 60	# be nice
 timeout = 10	# requests timeout
 
@@ -124,21 +126,10 @@ class SKUError(Exception):
     def __str__(self):
         return unicode(self).encode('utf-8')
 
-class CredentialsError(Exception):
-    def __unicode__(self):
-        return _('Error: Invalid Credentials')
-    def __str__(self):
-        return unicode(self).encode('utf-8')
 
 class CmdrError(Exception):
     def __unicode__(self):
         return _('Error: Wrong Cmdr')	# Raised when the user has multiple accounts and the username/password setting is not for the account they're currently playing OR the user has reset their Cmdr and the Companion API server is still returning data for the old Cmdr
-    def __str__(self):
-        return unicode(self).encode('utf-8')
-
-class VerificationRequired(Exception):
-    def __unicode__(self):
-        return _('Error: Verification failed')
     def __str__(self):
         return unicode(self).encode('utf-8')
 
@@ -163,65 +154,15 @@ class Session:
         if getattr(sys, 'frozen', False):
             os.environ['REQUESTS_CA_BUNDLE'] = join(config.respath, 'cacert.pem')
 
-    def login(self, username=None, password=None, is_beta=False):
-        if (not username or not password):
-            if not self.credentials:
-                raise CredentialsError()
-            else:
-                credentials = self.credentials
-        else:
-            credentials = { 'email' : username, 'password' : password, 'beta' : is_beta }
+    def login(self, username=None, password=None, token=None, is_beta=False):
+        # just return with 200 for now, do proper login later on, just PoC
 
-        if self.credentials == credentials and self.state == Session.STATE_OK:
-            return	# already logged in
+        self.state = Session.STATE_OK
+        self.session = requests.Session()
+        self.server = is_beta and SERVER_BETA or SERVER_LIVE
+        companionoauth2.use_refresh_token()
 
-        if not self.credentials or self.credentials['email'] != credentials['email'] or self.credentials['beta'] != credentials['beta']:
-            # changed account
-            self.close()
-            self.session = requests.Session()
-            self.session.headers['User-Agent'] = 'EDCD-%s-%s' % (appname, appversion)
-            cookiefile = join(config.app_dir, 'cookies-%s.txt' % hashlib.md5(credentials['email']).hexdigest())
-            if not isfile(cookiefile) and isfile(join(config.app_dir, 'cookies.txt')):
-                os.rename(join(config.app_dir, 'cookies.txt'), cookiefile)	# migration from <= 2.25
-            self.session.cookies = LWPCookieJar(cookiefile)
-            try:
-                self.session.cookies.load()
-            except IOError:
-                pass
-
-        self.server = credentials['beta'] and SERVER_BETA or SERVER_LIVE
-        self.credentials = credentials
-        self.state = Session.STATE_INIT
-        try:
-            r = self.session.post(self.server + URL_LOGIN, data = self.credentials, timeout=timeout)
-        except:
-            if __debug__: print_exc()
-            raise ServerError()
-
-        if r.status_code != requests.codes.ok or 'server error' in r.text:
-            self.dump(r)
-            raise ServerError()
-        elif r.url == self.server + URL_LOGIN:		# would have redirected away if success
-            self.dump(r)
-            if 'purchase' in r.text.lower():
-                raise SKUError()
-            else:
-                raise CredentialsError()
-        elif r.url == self.server + URL_CONFIRM:	# redirected to verification page
-            self.state = Session.STATE_AUTH
-            raise VerificationRequired()
-        else:
-            self.state = Session.STATE_OK
-            return r.status_code
-
-    def verify(self, code):
-        if not code:
-            raise VerificationRequired()
-        r = self.session.post(self.server + URL_CONFIRM, data = {'code' : code}, timeout=timeout)
-        if r.status_code != requests.codes.ok or r.url == self.server + URL_CONFIRM:	# would have redirected away if success
-            raise VerificationRequired()
-        self.session.cookies.save()	# Save cookies now for use by command-line app
-        self.login()
+        return 200
 
     def query(self, endpoint):
         if self.state == Session.STATE_NONE:
@@ -231,7 +172,8 @@ class Session:
         elif self.state == Session.STATE_AUTH:
             raise VerificationRequired()
         try:
-            r = self.session.get(self.server + endpoint, timeout=timeout)
+            headers = {'x-frontier-auth': companionoauth2.get_access_token()}
+            r = self.session.get(self.server + endpoint, timeout=timeout, headers=headers)
         except:
             if __debug__: print_exc()
             raise ServerError()
@@ -282,7 +224,6 @@ class Session:
         self.state = Session.STATE_NONE
         if self.session:
             try:
-                self.session.cookies.save()
                 self.session.close()
             except:
                 if __debug__: print_exc()

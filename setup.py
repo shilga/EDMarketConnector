@@ -43,7 +43,7 @@ if dist_dir and len(dist_dir)>1 and isdir(dist_dir):
 macdeveloperid = None
 
 # Windows paths
-WIXPATH = r'C:\Program Files (x86)\WiX Toolset v3.9\bin'
+WIXPATH = r'C:\Program Files (x86)\WiX Toolset v3.11\bin'
 SDKPATH = r'C:\Program Files (x86)\Windows Kits\8.1\bin\x86'
 
 # OSX paths
@@ -108,6 +108,7 @@ elif sys.platform=='win32':
                       'shutil', 'sqlite3', 'zipfile',	# Included for plugins
                   ],
                   'excludes': [ 'distutils', 'iniparse', '_markerlib', 'optparse', 'PIL', 'pkg_resources', 'simplejson', 'unittest' ],
+                  "dll_excludes": ["MSVCP90.dll","libzmq.pyd","geos_c.dll","api-ms-win-core-string-l1-1-0.dll","api-ms-win-core-registry-l1-1-0.dll","api-ms-win-core-errorhandling-l1-1-1.dll","api-ms-win-core-string-l2-1-0.dll","api-ms-win-core-profile-l1-1-0.dll","api-ms-win*.dll","api-ms-win-core-processthreads-l1-1-2.dll","api-ms-win-core-libraryloader-l1-2-1.dll","api-ms-win-core-file-l1-2-1.dll","api-ms-win-security-base-l1-2-0.dll","api-ms-win-eventing-provider-l1-1-0.dll","api-ms-win-core-heap-l2-1-0.dll","api-ms-win-core-libraryloader-l1-2-0.dll","api-ms-win-core-localization-l1-2-1.dll","api-ms-win-core-sysinfo-l1-2-1.dll","api-ms-win-core-synch-l1-2-0.dll","api-ms-win-core-heap-l1-2-0.dll","api-ms-win-core-handle-l1-1-0.dll","api-ms-win-core-io-l1-1-1.dll","api-ms-win-core-com-l1-1-1.dll","api-ms-win-core-memory-l1-1-2.dll","api-ms-win-core-version-l1-1-1.dll","api-ms-win-core-version-l1-1-0.dll","api-ms-win-core-delayload-l1-1-0.dll","api-ms-win-core-processthreads-l1-1-0.dll","api-ms-win-core-delayload-l1-1-1.dll","api-ms-win-core-errorhandling-l1-1-0.dll","api-ms-win-core-sysinfo-l1-1-0.dll","api-ms-win-core-apiquery-l1-1-0.dll"]
               }
     }
 
